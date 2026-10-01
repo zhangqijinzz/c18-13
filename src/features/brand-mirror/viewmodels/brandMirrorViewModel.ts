@@ -68,11 +68,22 @@ export class BrandMirrorViewModel {
       createdAt: new Date().toISOString(),
     }
     const versions = [...this.snapshot.versions, nextVersion]
-    this.persist({ tokens: this.snapshot.tokens, theme: this.snapshot.theme, versions }, '版本已保存')
+    this.persist({ tokens: this.snapshot.tokens, theme: this.snapshot.theme, versions }, `版本已保存${this.compareExitNotice()}`)
   }
 
   toggleCompare(): void {
-    this.snapshot = { ...this.snapshot, compareMode: !this.snapshot.compareMode, message: this.snapshot.compareMode ? '已退出对比模式' : '正在对比最近两个版本' }
+    if (this.snapshot.compareMode) {
+      this.snapshot = { ...this.snapshot, compareMode: false, message: '已退出对比模式' }
+      this.emit()
+      return
+    }
+    const compared = this.snapshot.versions.slice(-2)
+    if (compared.length < 2) {
+      this.snapshot = { ...this.snapshot, message: '保存两个版本后即可开始对比' }
+      this.emit()
+      return
+    }
+    this.snapshot = { ...this.snapshot, compareMode: true, message: `正在对比 ${compared[0].label} 与 ${compared[1].label}` }
     this.emit()
   }
 
@@ -89,8 +100,15 @@ export class BrandMirrorViewModel {
 
   private update(partial: Partial<Pick<BrandDocument, 'tokens' | 'theme'>>, message: string): void {
     const tokens = partial.tokens ?? this.snapshot.tokens
-    this.snapshot = this.makeSnapshot({ tokens, theme: partial.theme ?? this.snapshot.theme, versions: this.snapshot.versions }, message, 'editing')
+    const notice = this.compareExitNotice()
+    this.snapshot = this.makeSnapshot({ tokens, theme: partial.theme ?? this.snapshot.theme, versions: this.snapshot.versions }, `${message}${notice}`, 'editing')
     this.persistCurrent()
+  }
+
+  // 对比模式生命周期：任何改动令牌、主题或版本列表的操作都会明确退出对比，
+  // 并在消息中告知；导出等只读操作不影响对比状态。
+  private compareExitNotice(): string {
+    return this.snapshot.compareMode ? '，已退出对比模式' : ''
   }
 
   private persistCurrent(): void {

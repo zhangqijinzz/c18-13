@@ -38,6 +38,72 @@ describe('BrandMirrorViewModel', () => {
     viewModel.toggleCompare()
     expect(viewModel.getSnapshot().versions.map((version) => version.label)).toEqual(['Version A', 'Version B'])
     expect(viewModel.getSnapshot().compareMode).toBe(true)
+    expect(viewModel.getSnapshot().message).toContain('Version A')
+    expect(viewModel.getSnapshot().message).toContain('Version B')
+  })
+
+  it('refuses to enter comparison mode with fewer than two versions', () => {
+    const repository = new MemoryRepository()
+    const viewModel = new BrandMirrorViewModel(repository)
+    viewModel.initialize()
+    viewModel.saveVersion()
+    viewModel.toggleCompare()
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toContain('保存两个版本')
+  })
+
+  it('exits comparison mode with a notice when a token changes', () => {
+    const repository = new MemoryRepository()
+    const viewModel = new BrandMirrorViewModel(repository)
+    viewModel.initialize()
+    viewModel.saveVersion()
+    viewModel.updateColor('primary', '#238B73')
+    viewModel.saveVersion()
+    viewModel.toggleCompare()
+    viewModel.updateScale('typeScale', 0, 18)
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toContain('令牌已更新')
+    expect(viewModel.getSnapshot().message).toContain('已退出对比模式')
+    viewModel.updateColor('secondary', '#FFFFFF')
+    expect(viewModel.getSnapshot().message).toBe('令牌已更新')
+  })
+
+  it('exits comparison mode with a notice on theme switch, reset and save', () => {
+    const repository = new MemoryRepository()
+    const viewModel = new BrandMirrorViewModel(repository)
+    viewModel.initialize()
+    viewModel.saveVersion()
+    viewModel.updateColor('primary', '#238B73')
+    viewModel.saveVersion()
+
+    viewModel.toggleCompare()
+    viewModel.selectTheme('night')
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toBe('已切换基础主题，已退出对比模式')
+
+    viewModel.toggleCompare()
+    viewModel.reset()
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toBe('已恢复默认令牌，已退出对比模式')
+
+    viewModel.toggleCompare()
+    viewModel.saveVersion()
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toBe('版本已保存，已退出对比模式')
+  })
+
+  it('keeps comparison mode when exporting guidelines', () => {
+    const repository = new MemoryRepository()
+    const exporter = new MemoryExporter()
+    const viewModel = new BrandMirrorViewModel(repository, exporter)
+    viewModel.initialize()
+    viewModel.saveVersion()
+    viewModel.updateColor('primary', '#238B73')
+    viewModel.saveVersion()
+    viewModel.toggleCompare()
+    viewModel.exportBrandGuidelines()
+    expect(viewModel.getSnapshot().compareMode).toBe(true)
+    expect(viewModel.getSnapshot().message).toContain('导出')
   })
 
   it('keeps editing usable when persistence fails', () => {
