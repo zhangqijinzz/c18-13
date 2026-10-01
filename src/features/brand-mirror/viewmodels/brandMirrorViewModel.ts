@@ -72,7 +72,13 @@ export class BrandMirrorViewModel {
   }
 
   toggleCompare(): void {
-    this.snapshot = { ...this.snapshot, compareMode: !this.snapshot.compareMode, message: this.snapshot.compareMode ? '已退出对比模式' : '正在对比最近两个版本' }
+    if (this.snapshot.compareMode) {
+      this.snapshot = { ...this.snapshot, compareMode: false, message: '已退出对比模式' }
+    } else if (this.snapshot.versions.length >= 2) {
+      this.snapshot = { ...this.snapshot, compareMode: true, message: '正在对比最近两个版本' }
+    } else {
+      this.snapshot = { ...this.snapshot, message: '先保存两个版本，再开始对比' }
+    }
     this.emit()
   }
 
@@ -87,29 +93,37 @@ export class BrandMirrorViewModel {
     this.emit()
   }
 
+  // 对比模式生命周期：编辑令牌、切换主题、恢复默认、保存版本都会结束对比，
+  // 并在消息中明确告知；导出等只读操作不影响对比状态。
   private update(partial: Partial<Pick<BrandDocument, 'tokens' | 'theme'>>, message: string): void {
+    const compareExited = this.snapshot.compareMode
     const tokens = partial.tokens ?? this.snapshot.tokens
-    this.snapshot = this.makeSnapshot({ tokens, theme: partial.theme ?? this.snapshot.theme, versions: this.snapshot.versions }, message, 'editing')
-    this.persistCurrent()
+    this.snapshot = this.makeSnapshot({ tokens, theme: partial.theme ?? this.snapshot.theme, versions: this.snapshot.versions }, this.composeMessage(message, compareExited), 'editing')
+    this.persistCurrent(compareExited)
   }
 
-  private persistCurrent(): void {
+  private persistCurrent(compareExited = false): void {
     try {
       this.repository.save({ version: 1, tokens: this.snapshot.tokens, theme: this.snapshot.theme, versions: this.snapshot.versions })
     } catch {
-      this.snapshot = { ...this.snapshot, status: 'error', message: '本地保存失败，但当前编辑仍保留在页面中' }
+      this.snapshot = { ...this.snapshot, status: 'error', message: this.composeMessage('本地保存失败，但当前编辑仍保留在页面中', compareExited) }
     }
     this.emit()
   }
 
   private persist(document: Omit<BrandDocument, 'version'>, message: string): void {
+    const compareExited = this.snapshot.compareMode
     try {
       this.repository.save({ version: 1, ...document })
-      this.snapshot = this.makeSnapshot(document, message, 'ready')
+      this.snapshot = this.makeSnapshot(document, this.composeMessage(message, compareExited), 'ready')
     } catch {
       this.snapshot = { ...this.snapshot, status: 'error', message: '版本保存失败，请稍后重试' }
     }
     this.emit()
+  }
+
+  private composeMessage(message: string, compareExited: boolean): string {
+    return compareExited ? `${message} · 已退出对比模式` : message
   }
 
   private makeSnapshot(document: Omit<BrandDocument, 'version'>, message = '', status: BrandMirrorSnapshot['status'] = 'ready'): BrandMirrorSnapshot {

@@ -40,6 +40,64 @@ describe('BrandMirrorViewModel', () => {
     expect(viewModel.getSnapshot().compareMode).toBe(true)
   })
 
+  function viewModelInCompareMode(exporter?: MemoryExporter): BrandMirrorViewModel {
+    const viewModel = new BrandMirrorViewModel(new MemoryRepository(), exporter)
+    viewModel.initialize()
+    viewModel.saveVersion()
+    viewModel.updateColor('primary', '#238B73')
+    viewModel.saveVersion()
+    viewModel.toggleCompare()
+    return viewModel
+  }
+
+  it('ends comparison with a clear notice when a token changes during compare', () => {
+    const viewModel = viewModelInCompareMode()
+    viewModel.updateColor('primary', '#111111')
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toContain('令牌已更新')
+    expect(viewModel.getSnapshot().message).toContain('已退出对比模式')
+  })
+
+  it('ends comparison with a clear notice when switching theme or resetting during compare', () => {
+    const themed = viewModelInCompareMode()
+    themed.selectTheme('night')
+    expect(themed.getSnapshot().compareMode).toBe(false)
+    expect(themed.getSnapshot().message).toContain('已切换基础主题')
+    expect(themed.getSnapshot().message).toContain('已退出对比模式')
+
+    const reset = viewModelInCompareMode()
+    reset.reset()
+    expect(reset.getSnapshot().compareMode).toBe(false)
+    expect(reset.getSnapshot().message).toContain('已恢复默认令牌')
+    expect(reset.getSnapshot().message).toContain('已退出对比模式')
+  })
+
+  it('ends comparison with a clear notice when saving a version during compare', () => {
+    const viewModel = viewModelInCompareMode()
+    viewModel.saveVersion()
+    expect(viewModel.getSnapshot().versions).toHaveLength(3)
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toContain('版本已保存')
+    expect(viewModel.getSnapshot().message).toContain('已退出对比模式')
+  })
+
+  it('requires two saved versions before entering comparison', () => {
+    const viewModel = new BrandMirrorViewModel(new MemoryRepository())
+    viewModel.initialize()
+    viewModel.toggleCompare()
+    expect(viewModel.getSnapshot().compareMode).toBe(false)
+    expect(viewModel.getSnapshot().message).toContain('先保存两个版本')
+  })
+
+  it('keeps comparison active for read-only actions like export', () => {
+    const exporter = new MemoryExporter()
+    const viewModel = viewModelInCompareMode(exporter)
+    viewModel.exportBrandGuidelines()
+    expect(exporter.received).toContain('# BrandMirror 品牌规范')
+    expect(viewModel.getSnapshot().compareMode).toBe(true)
+    expect(viewModel.getSnapshot().message).toContain('导出')
+  })
+
   it('keeps editing usable when persistence fails', () => {
     const repository = new MemoryRepository()
     const viewModel = new BrandMirrorViewModel(repository)
